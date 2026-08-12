@@ -48,7 +48,7 @@
     "name": "local"
   },
   "output": {
-    "path": "output/final-planes/p99/local-only"
+    "path": "output/all-planes/p99/local-only"
   },
   "logging": {
     "task_events": "off",

@@ -178,7 +178,7 @@ def main() -> int:
     series = []
     for index, run_dir in enumerate(args.runs):
         run_name = run_dir.name.replace("_", "-")
-        method_name = _canonical_method_name(run_name)
+        method_name = canonical_method(run_name)
         if args.labels is not None:
             label = args.labels[index]
         else:

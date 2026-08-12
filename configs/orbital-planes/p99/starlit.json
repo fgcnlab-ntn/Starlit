@@ -48,7 +48,7 @@
     "name": "starlit"
   },
   "output": {
-    "path": "output/final-planes/p99/starlit"
+    "path": "output/all-planes/p99/starlit"
   },
   "logging": {
     "task_events": "off",

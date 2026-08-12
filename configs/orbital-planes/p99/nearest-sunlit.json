@@ -48,7 +48,7 @@
     "name": "nearest-sunlit"
   },
   "output": {
-    "path": "output/final-planes/p99/nearest-sunlit"
+    "path": "output/all-planes/p99/nearest-sunlit"
   },
   "logging": {
     "task_events": "off",

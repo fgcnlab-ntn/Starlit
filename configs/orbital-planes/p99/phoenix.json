@@ -48,7 +48,7 @@
     "name": "phoenix"
   },
   "output": {
-    "path": "output/final-planes/p99/phoenix"
+    "path": "output/all-planes/p99/phoenix"
   },
   "logging": {
     "task_events": "off",

@@ -108,6 +108,11 @@ def collect_rows(
             summary = json.loads(summary_file.read_text())
             battery = summary.get("battery_violations", {})
             legacy_objective = summary.get("objective", {})
+            if "avg_unsafe_ratio" not in battery:
+                raise ValueError(
+                    f"{summary_file}: missing battery_violations.avg_unsafe_ratio; "
+                    "rerun the simulation with the current logger"
+                )
             rows.append(
                 {
                     "run": group_dir.name,
@@ -122,6 +127,9 @@ def collect_rows(
                     ),
                     "unique_below_e_safe_ratio": float(
                         battery.get("unique_breached_ratio", 0.0)
+                    ),
+                    "avg_below_e_safe_ratio": float(
+                        battery["avg_unsafe_ratio"]
                     ),
                     "task_failure_ratio": task_failure_ratio(summary),
                 }
@@ -145,6 +153,7 @@ def write_csv(rows: list[dict[str, float | str]], path: Path) -> None:
         "loading_pct",
         "below_e_safe_ratio",
         "unique_below_e_safe_ratio",
+        "avg_below_e_safe_ratio",
         "task_failure_ratio",
     ]
     with path.open("w", newline="") as f:
@@ -166,6 +175,8 @@ def plot_metric(
     methods: list[str],
     metric: str,
     ylabel: str,
+    y_max: int = 80,
+    ylabel_rotation: int = 0,
 ) -> None:
     plt = _pyplot()
     fig, ax = plt.subplots(figsize=(9, 5.4))
@@ -195,7 +206,12 @@ def plot_metric(
         )
 
     ax.set_xlabel("Task intensity (%)")
-    ax.set_ylabel(ylabel, rotation=0, va="center", labelpad=16)
+    ax.set_ylabel(
+        ylabel,
+        rotation=ylabel_rotation,
+        va="center",
+        labelpad=16,
+    )
     ax.grid(True, axis="both", alpha=0.75)
     x_values = [float(row["loading_pct"]) for row in rows]
     x_min = min(x_values)
@@ -203,8 +219,8 @@ def plot_metric(
     padding = max(1.0, (x_max - x_min) * 0.08)
     ax.set_xlim(x_min - padding, x_max + padding)
     ax.set_xticks(sorted({float(row["loading_pct"]) for row in rows}))
-    ax.set_ylim(-3, 80)
-    ax.set_yticks([0, 20, 40, 60, 80])
+    ax.set_ylim(-3, y_max)
+    ax.set_yticks(list(range(0, y_max + 1, 20)))
     ax.yaxis.set_minor_locator(MultipleLocator(10))
     ax.tick_params(axis="y", which="major", left=True, length=7, width=1.0)
     ax.tick_params(axis="y", which="minor", left=True, length=5, width=1.0)
@@ -256,8 +272,10 @@ def main() -> None:
         rows,
         args.out_dir / "final-loading-below-e-safe",
         methods=args.methods,
-        metric="below_e_safe_ratio",
-        ylabel="Eclipse breach / eclipse satellites (%)",
+        metric="avg_below_e_safe_ratio",
+        ylabel="Satellites below E_safe (%)",
+        y_max=100,
+        ylabel_rotation=90,
     )
     plot_metric(
         rows,

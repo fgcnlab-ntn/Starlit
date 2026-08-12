@@ -110,6 +110,13 @@ def eclipse_unsafe_ratio(states: list[SatelliteState]) -> float:
     return unsafe / len(eclipse_states)
 
 
+def unsafe_ratio(states: list[SatelliteState]) -> float:
+    if not states:
+        return 0.0
+    unsafe = sum(1 for state in states if not state.safe_battery)
+    return unsafe / len(states)
+
+
 def state_record(
     start: dt.datetime,
     states: list[SatelliteState],
@@ -234,6 +241,7 @@ class RunLog:
         self._steps = 0
         self._eclipse_idle_j = 0.0
         self._eclipse_task_j = 0.0
+        self._unsafe_ratio_sum = 0.0
         self._eclipse_unsafe_ratio_sum = 0.0
         self._final_states: list[SatelliteState] | None = None
         self._breached_sat_ids: set[int] = set()
@@ -330,6 +338,7 @@ class RunLog:
         eclipse_energy = eclipse_energy_summary(states)
         self._eclipse_idle_j += eclipse_energy["idle_j"]
         self._eclipse_task_j += eclipse_energy["task_j"]
+        self._unsafe_ratio_sum += unsafe_ratio(states)
         self._eclipse_unsafe_ratio_sum += eclipse_unsafe_ratio(states)
         self._steps += 1
         self._final_states = states
@@ -457,17 +466,20 @@ class RunLog:
             steps = len(all_steps)
             eclipse_idle_j = 0.0
             eclipse_task_j = 0.0
+            unsafe_ratio_sum = 0.0
             eclipse_unsafe_ratio_sum = 0.0
             for states in all_steps:
                 eclipse_energy = eclipse_energy_summary(states)
                 eclipse_idle_j += eclipse_energy["idle_j"]
                 eclipse_task_j += eclipse_energy["task_j"]
+                unsafe_ratio_sum += unsafe_ratio(states)
                 eclipse_unsafe_ratio_sum += eclipse_unsafe_ratio(states)
         elif self._final_states is not None:
             final_states = self._final_states
             steps = self._steps
             eclipse_idle_j = self._eclipse_idle_j
             eclipse_task_j = self._eclipse_task_j
+            unsafe_ratio_sum = self._unsafe_ratio_sum
             eclipse_unsafe_ratio_sum = self._eclipse_unsafe_ratio_sum
         else:
             raise ValueError("cannot complete a run with no state records")
@@ -479,6 +491,7 @@ class RunLog:
         avg_eclipse_unsafe_ratio = (
             0.0 if steps == 0 else eclipse_unsafe_ratio_sum / steps
         )
+        avg_unsafe_ratio = 0.0 if steps == 0 else unsafe_ratio_sum / steps
         summary = {
             "schema_version": SCHEMA_VERSION,
             "elapsed_wall_s": self._elapsed_wall_s(),
@@ -507,6 +520,7 @@ class RunLog:
                 },
             },
             "battery_violations": {
+                "avg_unsafe_ratio": avg_unsafe_ratio,
                 "avg_eclipse_unsafe_ratio": avg_eclipse_unsafe_ratio,
                 "unique_breached_satellites": len(self._breached_sat_ids),
                 "unique_breached_ratio": len(self._breached_sat_ids)

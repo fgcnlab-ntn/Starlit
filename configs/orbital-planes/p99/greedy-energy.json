@@ -48,7 +48,7 @@
     "name": "greedy-energy"
   },
   "output": {
-    "path": "output/final-planes/p99/greedy-energy"
+    "path": "output/all-planes/p99/greedy-energy"
   },
   "logging": {
     "task_events": "off",
