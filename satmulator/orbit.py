@@ -192,6 +192,8 @@ class SatelliteStepStats:
     completed_tasks: int = 0
     failed_tasks: int = 0
     deferred_tasks: int = 0
+    local_completed_tasks: int = 0
+    local_failed_tasks: int = 0
     task_energy_j: float = 0.0
     task_compute_time_s: float = 0.0
     task_compute_energy_j: float = 0.0
@@ -418,6 +420,7 @@ def apply_step(
         total_time_s: float,
     ) -> None:
         stats_by_sat[running.source_sat].failed_tasks += 1
+        stats_by_sat[running.target_sat].local_failed_tasks += 1
         env.failed_tasks.append(running.task.task_id)
         env.emit_task_event(
             "task_failed",
@@ -516,6 +519,7 @@ def apply_step(
                 continue
 
             stats_by_sat[running.source_sat].completed_tasks += 1
+            stats_by_sat[running.target_sat].local_completed_tasks += 1
             env.completed_tasks.append(task.task_id)
             source_energy_j, target_energy_j, total_energy_j = accumulated_energy(running)
             env.emit_task_event(
@@ -576,6 +580,9 @@ def apply_step(
                 task_compute_time_s=stats.task_compute_time_s,
                 task_compute_energy_j=stats.task_compute_energy_j,
                 task_transmission_energy_j=stats.task_transmission_energy_j,
+                local_completed_tasks=stats.local_completed_tasks,
+                local_failed_tasks=stats.local_failed_tasks,
+                queue_remaining_tasks=len(sat.task_queue),
             )
         )
 

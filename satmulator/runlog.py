@@ -182,6 +182,11 @@ def state_record(
                     "compute_energy_j": state.task_compute_energy_j,
                     "transmission_energy_j": state.task_transmission_energy_j,
                 },
+                "local_activity": {
+                    "completed": state.local_completed_tasks,
+                    "failed": state.local_failed_tasks,
+                    "queue_remaining": state.queue_remaining_tasks,
+                },
                 "battery_status": {
                     "below_min_safe": not state.safe_battery,
                     "first_breach": state.sat_id in new_breach_ids,

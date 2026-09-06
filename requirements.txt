@@ -2,3 +2,6 @@ skyfield>=1.49
 
 matplotlib>=3.8
 seaborn>=0.13
+# VPython 7.6 imports pkg_resources, removed from newer setuptools releases.
+setuptools<81
+vpython>=7.6

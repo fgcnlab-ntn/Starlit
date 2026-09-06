@@ -60,6 +60,33 @@ python minimal_orbit.py \
 - `tasks.jsonl`：任務生命週期事件。
 - `summary.json`：實驗摘要與主要評估指標。
 
+### 播放衛星軌跡
+
+互動式視覺化工具直接讀取模擬輸出的 `states.jsonl`：
+
+```bash
+python -m tools.visualizer output/log
+```
+
+視覺化工具提供以下重點功能：
+
+- 以 3D 地球播放衛星軌跡，並呈現日照、蝕區與軌道面
+- 選取衛星後顯示經緯度、軌道高度、日照、電量、地面新任務數，以及該
+  time step 在本機完成、失敗、運算與排隊的任務資訊
+- 右側圖表顯示所選衛星最近 120 個 time steps 的電量，以及日照與蝕區
+  衛星的運算利用率分布
+
+要播放的模擬設定必須保留完整時間步：
+
+```json
+"logging": {
+  "task_events": "off",
+  "state_steps": "full"
+}
+```
+
+視覺化只讀取既有輸出，不會重新執行或修改模擬結果。
+
 ## 評估指標
 
 電池安全門檻定義為：
@@ -193,4 +220,5 @@ python tools/compare_grouped_task_outcomes.py \
 | `tools/plot_loading_violin.py` | 繪製衛星負載與日照利用率小提琴圖。 |
 | `tools/plot_final_loading_effects.py` | 繪製負載比例對電池與任務結果的影響。 |
 | `tools/plot_output.py` | 統一圖表輸出為 PNG 與 PDF。 |
+| `tools/visualizer.py` | 互動播放 `states.jsonl` 中的衛星軌跡。 |
 | `tools/worldpop_to_demand_points.py` | 將 WorldPop 柵格資料彙整成需求點 CSV。 |

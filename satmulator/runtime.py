@@ -117,6 +117,9 @@ class SatelliteRuntime:
         task_compute_time_s: float = 0.0,
         task_compute_energy_j: float = 0.0,
         task_transmission_energy_j: float = 0.0,
+        local_completed_tasks: int = 0,
+        local_failed_tasks: int = 0,
+        queue_remaining_tasks: int = 0,
     ) -> SatelliteState:
         return SatelliteState(
             time_s=time_s,
@@ -147,6 +150,9 @@ class SatelliteRuntime:
             task_compute_time_s=task_compute_time_s,
             task_compute_energy_j=task_compute_energy_j,
             task_transmission_energy_j=task_transmission_energy_j,
+            local_completed_tasks=local_completed_tasks,
+            local_failed_tasks=local_failed_tasks,
+            queue_remaining_tasks=queue_remaining_tasks,
         )
 
 

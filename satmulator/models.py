@@ -169,6 +169,9 @@ class SatelliteState:
     task_compute_energy_j: float = 0.0
     task_transmission_energy_j: float = 0.0
     deferred_tasks: int = 0
+    local_completed_tasks: int = 0
+    local_failed_tasks: int = 0
+    queue_remaining_tasks: int = 0
 
 
 @dataclass(frozen=True)
