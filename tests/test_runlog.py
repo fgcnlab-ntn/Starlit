@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from satmulator.models import SatelliteState
-from satmulator.runlog import RunLog
+from simulator.models import SatelliteState
+from simulator.runlog import RunLog
 
 
 def satellite_state(time_s: int, sat_id: int, *, safe: bool) -> SatelliteState:

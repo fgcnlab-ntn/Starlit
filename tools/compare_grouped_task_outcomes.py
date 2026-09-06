@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from satmulator.plot_styles import find_method_run_dir, method_style
+from simulator.plot_styles import find_method_run_dir, method_style
 from tools.plot_output import format_written, save_png_pdf
 
 
@@ -47,7 +47,7 @@ SEASON_LABEL_ALIASES = {
 
 
 def _pyplot():
-    cache_dir = Path(tempfile.gettempdir()) / "satmulator-matplotlib"
+    cache_dir = Path(tempfile.gettempdir()) / "simulator-matplotlib"
     cache_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("MPLCONFIGDIR", str(cache_dir))
     os.environ.setdefault("XDG_CACHE_HOME", str(cache_dir))

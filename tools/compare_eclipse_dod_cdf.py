@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from satmulator.plot_styles import (
+from simulator.plot_styles import (
     METHOD_ORDER,
     canonical_method,
     line_kwargs,
@@ -33,7 +33,7 @@ def _sort_key(run_name: str) -> int:
 
 
 def _pyplot():
-    cache_dir = Path(tempfile.gettempdir()) / "satmulator-matplotlib"
+    cache_dir = Path(tempfile.gettempdir()) / "simulator-matplotlib"
     cache_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("MPLCONFIGDIR", str(cache_dir))
     os.environ.setdefault("XDG_CACHE_HOME", str(cache_dir))

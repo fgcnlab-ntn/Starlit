@@ -1,7 +1,7 @@
 import unittest
 
-from satmulator.battery import ENERGY_EPSILON_J, battery_is_safe, battery_step
-from satmulator.models import (
+from simulator.battery import ENERGY_EPSILON_J, battery_is_safe, battery_step
+from simulator.models import (
     Assignment,
     BatteryConfig,
     ComputeConfig,
@@ -9,8 +9,8 @@ from satmulator.models import (
     Route,
     Task,
 )
-from satmulator.orbit import apply_step
-from satmulator.runtime import EnvironmentRuntime, SatelliteRuntime
+from simulator.orbit import apply_step
+from simulator.runtime import EnvironmentRuntime, SatelliteRuntime
 
 
 

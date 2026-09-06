@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import math
 
-from satmulator.constants import EARTH_MU_KM3_S2, EARTH_RADIUS_KM
-from satmulator.orbit import build_circular_illumination_timeline
+from simulator.constants import EARTH_MU_KM3_S2, EARTH_RADIUS_KM
+from simulator.orbit import build_circular_illumination_timeline
 
 
 def test_circular_timeline_lookups_point_to_exact_sampled_transitions() -> None:

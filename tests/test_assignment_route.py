@@ -1,6 +1,6 @@
 import unittest
 
-from satmulator.models import Assignment, Route
+from simulator.models import Assignment, Route
 
 
 class AssignmentRouteTests(unittest.TestCase):

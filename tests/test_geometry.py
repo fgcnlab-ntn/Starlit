@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from satmulator.geometry import circular_plane, circular_state
+from simulator.geometry import circular_plane, circular_state
 
 
 def test_circular_state_in_equatorial_plane() -> None:

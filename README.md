@@ -191,23 +191,23 @@ python tools/compare_grouped_task_outcomes.py \
 
 | 檔案 | 功能 |
 | --- | --- |
-| `satmulator/__init__.py` | 標記 `satmulator` Python 套件。 |
-| `satmulator/cli.py` | 解析命令列參數並啟動模擬。 |
-| `satmulator/config.py` | 讀取、驗證及建立模擬設定。 |
-| `satmulator/models.py` | 定義設定、任務、路徑及衛星狀態資料。 |
-| `satmulator/runtime.py` | 保存模擬期間會變動的衛星與環境狀態。 |
-| `satmulator/runner.py` | 組織完整模擬流程並輸出進度與摘要。 |
-| `satmulator/orbit.py` | 推進軌道、日照、電池與任務執行狀態。 |
-| `satmulator/geometry.py` | 計算軌道、向量、日照及幾何關係。 |
-| `satmulator/battery.py` | 更新電池能量並判斷安全門檻。 |
-| `satmulator/workload.py` | 載入需求點並產生人口加權任務。 |
-| `satmulator/isl.py` | 建立星間鏈路圖並計算路由。 |
-| `satmulator/route_cost.py` | 估算路由時間、運算量與能源成本。 |
-| `satmulator/scheduler.py` | 實作各種任務排程與能源限制。 |
-| `satmulator/runlog.py` | 寫入及讀取 JSON/JSONL 實驗紀錄。 |
-| `satmulator/task_projection.py` | 將任務事件還原為完整生命週期。 |
-| `satmulator/plot_styles.py` | 統一各排程方法的圖表樣式與名稱。 |
-| `satmulator/constants.py` | 保存模擬使用的物理常數。 |
+| `simulator/__init__.py` | 標記 `simulator` Python 套件。 |
+| `simulator/cli.py` | 解析命令列參數並啟動模擬。 |
+| `simulator/config.py` | 讀取、驗證及建立模擬設定。 |
+| `simulator/models.py` | 定義設定、任務、路徑及衛星狀態資料。 |
+| `simulator/runtime.py` | 保存模擬期間會變動的衛星與環境狀態。 |
+| `simulator/runner.py` | 組織完整模擬流程並輸出進度與摘要。 |
+| `simulator/orbit.py` | 推進軌道、日照、電池與任務執行狀態。 |
+| `simulator/geometry.py` | 計算軌道、向量、日照及幾何關係。 |
+| `simulator/battery.py` | 更新電池能量並判斷安全門檻。 |
+| `simulator/workload.py` | 載入需求點並產生人口加權任務。 |
+| `simulator/isl.py` | 建立星間鏈路圖並計算路由。 |
+| `simulator/route_cost.py` | 估算路由時間、運算量與能源成本。 |
+| `simulator/scheduler.py` | 實作各種任務排程與能源限制。 |
+| `simulator/runlog.py` | 寫入及讀取 JSON/JSONL 實驗紀錄。 |
+| `simulator/task_projection.py` | 將任務事件還原為完整生命週期。 |
+| `simulator/plot_styles.py` | 統一各排程方法的圖表樣式與名稱。 |
+| `simulator/constants.py` | 保存模擬使用的物理常數。 |
 
 ### 實驗與繪圖工具
 

@@ -1,15 +1,15 @@
 import unittest
 
-from satmulator.constants import EARTH_RADIUS_KM
-from satmulator.isl import (
+from simulator.constants import EARTH_RADIUS_KM
+from simulator.isl import (
     ISLGraph,
     build_isl_graph,
     grid_constellation_layout,
     has_line_of_sight,
     shortest_route,
 )
-from satmulator.models import ISLConfig, SatelliteView, Task
-from satmulator.scheduler import LocalOnlyScheduler, NearestSunlitScheduler
+from simulator.models import ISLConfig, SatelliteView, Task
+from simulator.scheduler import LocalOnlyScheduler, NearestSunlitScheduler
 
 
 def view(

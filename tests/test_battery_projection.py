@@ -4,23 +4,23 @@ from dataclasses import replace
 
 import pytest
 
-from satmulator.isl import ISLGraph
-from satmulator.models import (
+from simulator.isl import ISLGraph
+from simulator.models import (
     BatteryConfig,
     ComputeConfig,
     ISLConfig,
     SatelliteView,
     Task,
 )
-from satmulator.scheduler import (
+from simulator.scheduler import (
     BatteryReservation,
     create_scheduler,
     minimum_projected_battery_until_recharge,
     reserve_route_transmission_energy,
     route_respects_battery_projection,
 )
-from satmulator.models import Route
-from satmulator.route_cost import RouteCost
+from simulator.models import Route
+from simulator.route_cost import RouteCost
 
 
 def _battery() -> BatteryConfig:
@@ -97,7 +97,7 @@ def test_projection_reserves_upcoming_eclipse_idle() -> None:
 def test_batch_reservation_projects_once_then_uses_constant_time_budget(
     monkeypatch,
 ) -> None:
-    import satmulator.scheduler as scheduler_module
+    import simulator.scheduler as scheduler_module
 
     calls = 0
     real_projection = scheduler_module.minimum_projected_battery_until_recharge
@@ -201,7 +201,7 @@ def test_phoenix_tries_safe_peer_after_local_battery_rejection() -> None:
 
 
 def test_starlit_projects_once_per_satellite_not_once_per_task(monkeypatch) -> None:
-    import satmulator.scheduler as scheduler_module
+    import simulator.scheduler as scheduler_module
 
     calls = 0
     real_projection = scheduler_module.minimum_projected_battery_until_recharge
@@ -260,8 +260,8 @@ def test_starlit_projects_once_per_satellite_not_once_per_task(monkeypatch) -> N
 
 
 def test_starlit_stops_after_safe_sunlit_local_action(monkeypatch) -> None:
-    import satmulator.scheduler as scheduler_module
-    from satmulator.scheduler import StarlitScheduler
+    import simulator.scheduler as scheduler_module
+    from simulator.scheduler import StarlitScheduler
 
     class NoEclipseSearchStarlit(StarlitScheduler):
         def _peek_least_loaded_safe_eclipse_mod(self, **kwargs):
@@ -312,7 +312,7 @@ def test_starlit_stops_after_safe_sunlit_local_action(monkeypatch) -> None:
 
 
 def test_starlit_does_not_short_circuit_congested_sunlit_local() -> None:
-    from satmulator.scheduler import StarlitScheduler
+    from simulator.scheduler import StarlitScheduler
 
     source = SatelliteView(
         sat_id=0,
@@ -367,7 +367,7 @@ def test_starlit_does_not_short_circuit_congested_sunlit_local() -> None:
 def test_starlit_does_not_rescan_compute_rejected_eclipse_targets(
     monkeypatch,
 ) -> None:
-    from satmulator.scheduler import StarlitScheduler
+    from simulator.scheduler import StarlitScheduler
 
     class UnblockedStarlit(StarlitScheduler):
         def _blocked_route_relays(self, **kwargs):

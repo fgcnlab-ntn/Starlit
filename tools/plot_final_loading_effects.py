@@ -12,7 +12,7 @@ from matplotlib.ticker import MultipleLocator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from satmulator.plot_styles import (
+from simulator.plot_styles import (
     canonical_method,
     find_method_run_dir,
     method_style,
@@ -31,7 +31,7 @@ LOADING_RE = re.compile(r"^r(?P<pct>\d+(?:\.\d+)?)$")
 
 
 def _pyplot():
-    cache_dir = Path(tempfile.gettempdir()) / "satmulator-matplotlib"
+    cache_dir = Path(tempfile.gettempdir()) / "simulator-matplotlib"
     cache_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("MPLCONFIGDIR", str(cache_dir))
     os.environ.setdefault("XDG_CACHE_HOME", str(cache_dir))

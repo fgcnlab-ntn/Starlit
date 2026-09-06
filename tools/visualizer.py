@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from satmulator.runlog import SCHEMA_VERSION, load_run
+from simulator.runlog import SCHEMA_VERSION, load_run
 
 
 EARTH_RADIUS_KM = 6371.0

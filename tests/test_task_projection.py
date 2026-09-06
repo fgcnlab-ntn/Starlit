@@ -1,6 +1,6 @@
 import unittest
 
-from satmulator.task_projection import project_task_lifecycles
+from simulator.task_projection import project_task_lifecycles
 
 
 def event(event_type: str, time_s: int, task_id: int = 1, **details: object) -> dict[str, object]:

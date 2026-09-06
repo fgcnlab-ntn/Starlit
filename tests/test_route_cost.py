@@ -1,7 +1,7 @@
 import unittest
 
-from satmulator.models import ComputeConfig, ISLConfig, Route, Task
-from satmulator.route_cost import estimate_route_cost, estimate_route_timing
+from simulator.models import ComputeConfig, ISLConfig, Route, Task
+from simulator.route_cost import estimate_route_cost, estimate_route_timing
 
 
 def task() -> Task:

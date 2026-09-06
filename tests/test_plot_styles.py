@@ -1,4 +1,4 @@
-from satmulator.plot_styles import find_method_run_dir, method_style
+from simulator.plot_styles import find_method_run_dir, method_style
 
 
 def test_method7_output_uses_starlit_style() -> None:
