@@ -7,7 +7,7 @@ import math
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Protocol
 
 from simulator.runlog import SCHEMA_VERSION, load_run
 
@@ -29,6 +29,7 @@ INFO_PANEL_MARGIN_PX = 20
 INFO_PANEL_TEXT_HEIGHT_PX = 15
 INFO_PANEL_BORDER_PX = 10
 BATTERY_CHART_WINDOW_STEPS = 120
+LIVE_METRICS_WINDOW_STEPS = 100
 UTILIZATION_VIOLIN_POINTS = 81
 UTILIZATION_VIOLIN_BANDWIDTH_PCT = 5.0
 UTILIZATION_VIOLIN_HALF_WIDTH = 0.34
@@ -70,6 +71,56 @@ class Frame:
 class OrbitMarkerGeometry:
     radius_km: float
     normal_eci: tuple[float, float, float]
+
+
+class FrameCollection(Protocol):
+    battery_capacity_j: float | None
+    planes: tuple[int, ...]
+
+    def __len__(self) -> int: ...
+
+    def __getitem__(self, index: int) -> Frame: ...
+
+    def plane_for(self, sat_id: int) -> int: ...
+
+    def metadata_for(self, sat_id: int) -> SatelliteMetadata: ...
+
+    def satellites_in_plane(self, plane: int) -> tuple[int, ...]: ...
+
+
+class TaskIntensityControl(Protocol):
+    tasks_per_step: int
+
+    def set_tasks_per_step(self, value: int) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class LiveMetrics:
+    time_s: float
+    task_failure_rate_pct: float
+    pending_task_rate_pct: float
+
+
+class LiveMetricsCollection(Protocol):
+    def metrics_window(
+        self,
+        end_index: int,
+        *,
+        window_steps: int = LIVE_METRICS_WINDOW_STEPS,
+    ) -> tuple[LiveMetrics, ...]: ...
+
+
+def tasks_for_load_percentage(load_pct: float, capacity: int) -> int:
+    if not math.isfinite(load_pct) or load_pct < 0:
+        raise ValueError("load percentage must be finite and non-negative")
+    if capacity <= 0:
+        raise ValueError("task capacity must be positive")
+    return int(math.floor(capacity * load_pct / 100.0 + 0.5))
+
+
+def _format_load_percentage(tasks_per_step: int, capacity: int) -> str:
+    value = 100.0 * tasks_per_step / capacity
+    return f"{value:.0f}" if value.is_integer() else f"{value:.1f}"
 
 
 class StateFrames:
@@ -633,20 +684,40 @@ def _orbit_marker_geometry(
 class Visualizer:
     def __init__(
         self,
-        frames: StateFrames,
+        frames: FrameCollection,
         *,
         title: str = "Starlit simulation",
         satellite_radius_km: float = 60.0,
+        step_s: float | None = None,
     ) -> None:
         if satellite_radius_km <= 0:
             raise ValueError("satellite_radius_km must be positive")
+        if step_s is not None and step_s <= 0:
+            raise ValueError("step_s must be positive")
         self.frames = frames
         self.title = title
         self.satellite_radius_km = satellite_radius_km
+        self.step_s = step_s
 
-    def play(self, rate: int = 10) -> None:
+    def play(
+        self,
+        rate: int = 10,
+        *,
+        advance_live: Callable[[], bool] | None = None,
+        task_intensity: TaskIntensityControl | None = None,
+        task_capacity: int | None = None,
+        live_metrics: LiveMetricsCollection | None = None,
+    ) -> None:
         if rate <= 0:
             raise ValueError("rate must be positive")
+        if task_capacity is not None and task_capacity <= 0:
+            raise ValueError("task_capacity must be positive")
+        if (task_intensity is None) != (task_capacity is None):
+            raise ValueError(
+                "task_intensity and task_capacity must be specified together"
+            )
+        if live_metrics is not None and task_capacity is None:
+            raise ValueError("live_metrics requires task_capacity")
         try:
             import vpython as vp
         except ImportError as exc:
@@ -656,10 +727,21 @@ class Visualizer:
             ) from exc
 
         playback = Playback(len(self.frames))
+        live = advance_live is not None
+        if (live_metrics is not None) != live:
+            raise ValueError("live_metrics must be specified exactly in live mode")
+        live_complete = False
         satellite_plane_selection = PlaneSelection(self.frames.planes)
         path_plane_selection = PlaneSelection(self.frames.planes)
         path_plane_selection.select_none()
         dirty = True
+        first = self.frames[0]
+        if self.step_s is not None:
+            chart_step_s = self.step_s
+        elif len(self.frames) > 1:
+            chart_step_s = self.frames[1].time_s - first.time_s
+        else:
+            chart_step_s = 1.0
         graph_args: dict[str, Any] = {
             "width": 450,
             "height": 280,
@@ -676,9 +758,21 @@ class Visualizer:
             "ymin": 0,
             "fast": True,
         }
+        graph_args["xmin"], graph_args["xmax"] = _battery_chart_x_bounds(
+            first.time_s,
+            first.time_s,
+            chart_step_s,
+        )
         if self.frames.battery_capacity_j is not None:
             graph_args["ymax"] = 100
         battery_graph = vp.graph(**graph_args)
+        # VPython does not render a graph until a plot contains data.  A
+        # one-point curve draws no line but makes the empty graph visible.
+        _battery_graph_placeholder = vp.gcurve(
+            graph=battery_graph,
+            data=[(first.time_s / 3600.0, 0.0)],
+            color=vp.color.white,
+        )
 
         utilization_graph = vp.graph(
             width=450,
@@ -696,6 +790,45 @@ class Visualizer:
             fast=True,
         )
 
+        task_failure_graph: Any | None = None
+        pending_task_rate_graph: Any | None = None
+        if live:
+            live_step_h = max(1.0, abs(self.step_s or 1.0)) / 3600.0
+            live_xmin = first.time_s / 3600.0
+            live_xmax = live_xmin + live_step_h * LIVE_METRICS_WINDOW_STEPS
+            task_failure_graph = vp.graph(
+                width=450,
+                height=280,
+                align="none",
+                title="Cumulative task failure rate (failed / generated)",
+                xtitle="Simulation time (h)",
+                ytitle="Failure rate (%)",
+                ymin=0,
+                ymax=100,
+                xmin=live_xmin,
+                xmax=live_xmax,
+                scroll=True,
+                foreground=vp.color.black,
+                background=vp.color.white,
+                fast=True,
+            )
+            pending_task_rate_graph = vp.graph(
+                width=450,
+                height=280,
+                align="none",
+                title="Pending task rate (pending / generated)",
+                xtitle="Simulation time (h)",
+                ytitle="Pending rate (%)",
+                ymin=0,
+                ymax=100,
+                xmin=live_xmin,
+                xmax=live_xmax,
+                scroll=True,
+                foreground=vp.color.black,
+                background=vp.color.white,
+                fast=True,
+            )
+
         scene = vp.canvas(
             title=self.title,
             width=930,
@@ -710,15 +843,19 @@ class Visualizer:
         scene.range = EARTH_RADIUS_KM * 1.35
         scene.lights = []
         scene.ambient = vp.color.gray(EARTH_AMBIENT_LIGHT)
+        live_page_height = ";min-height:1370px" if live else ""
         scene.caption = (
-            '<style>#glowscript{position:relative;min-width:1440px}'
+            f'<style>#glowscript{{position:relative;min-width:1440px{live_page_height}}}'
             '.glowscript-graph{position:absolute!important;top:18px;left:950px;'
             'float:none!important;background:#fff!important}'
             '.glowscript-graph + .glowscript-graph{top:360px!important}</style>'
+            '<style>.glowscript-graph + .glowscript-graph + .glowscript-graph'
+            '{top:702px!important}'
+            '.glowscript-graph + .glowscript-graph + .glowscript-graph '
+            '+ .glowscript-graph{top:1024px!important}</style>'
             '<div style="clear:both"></div>'
         )
 
-        first = self.frames[0]
         initial_sun = _eci_to_scene(first.sun_eci_unit or (1.0, 0.0, 0.0))
         sunlight = vp.distant_light(
             direction=vp.vec(*initial_sun),
@@ -800,11 +937,11 @@ class Visualizer:
         battery_chart_last_index: int | None = None
         utilization_curves: list[Any] = []
         utilization_chart_last_index: int | None = None
+        task_failure_curve: Any | None = None
+        pending_task_rate_curve: Any | None = None
+        live_metrics_last_index: int | None = None
 
-        if len(self.frames) > 1:
-            utilization_step_s = self.frames[1].time_s - first.time_s
-        else:
-            utilization_step_s = 1.0
+        utilization_step_s = chart_step_s
 
         def clear_utilization_chart() -> None:
             nonlocal utilization_curves
@@ -860,6 +997,44 @@ class Visualizer:
             )
             utilization_chart_last_index = playback.index
 
+        def update_live_metrics_charts(_frame: Frame) -> None:
+            nonlocal task_failure_curve, pending_task_rate_curve
+            nonlocal live_metrics_last_index
+            if live_metrics is None or live_metrics_last_index == playback.index:
+                return
+            assert task_failure_graph is not None
+            assert pending_task_rate_graph is not None
+
+            current = live_metrics.metrics_window(playback.index)[-1]
+            time_h = current.time_s / 3600.0
+            if task_failure_curve is None:
+                task_failure_curve = vp.gcurve(
+                    graph=task_failure_graph,
+                    data=[(time_h, current.task_failure_rate_pct)],
+                    color=vp.vec(*SELECTED_SATELLITE_RGB),
+                    width=3,
+                    dot=True,
+                    dot_color=vp.vec(*SELECTED_SATELLITE_RGB),
+                    dot_radius=4,
+                )
+                pending_task_rate_curve = vp.gcurve(
+                    graph=pending_task_rate_graph,
+                    data=[(time_h, current.pending_task_rate_pct)],
+                    color=vp.vec(*ECLIPSE_SATELLITE_RGB),
+                    width=3,
+                    dot=True,
+                    dot_color=vp.vec(*ECLIPSE_SATELLITE_RGB),
+                    dot_radius=4,
+                )
+            else:
+                assert pending_task_rate_curve is not None
+                task_failure_curve.plot(time_h, current.task_failure_rate_pct)
+                pending_task_rate_curve.plot(
+                    time_h,
+                    current.pending_task_rate_pct,
+                )
+            live_metrics_last_index = playback.index
+
         def clear_battery_chart() -> None:
             nonlocal battery_curve
             nonlocal battery_chart_satellite_id, battery_chart_last_index
@@ -912,14 +1087,10 @@ class Visualizer:
                 )
 
             battery_graph.title = f"Satellite {satellite.sat_id}"
-            if len(self.frames) > 1:
-                step_s = self.frames[1].time_s - first.time_s
-            else:
-                step_s = 1.0
             battery_graph.xmin, battery_graph.xmax = _battery_chart_x_bounds(
                 first.time_s,
                 self.frames[playback.index].time_s,
-                step_s,
+                chart_step_s,
             )
             battery_chart_satellite_id = satellite.sat_id
             battery_chart_last_index = playback.index
@@ -955,7 +1126,10 @@ class Visualizer:
         face_direction(initial_sun)
 
         def set_paused_label() -> None:
-            pause_button.text = "Play" if playback.paused else "Pause"
+            if live_complete:
+                pause_button.text = "Completed"
+            else:
+                pause_button.text = "Play" if playback.paused else "Pause"
 
         def previous_100(_button: Any) -> None:
             nonlocal dirty
@@ -963,7 +1137,8 @@ class Visualizer:
             set_paused_label()
             dirty = True
 
-        vp.button(text="-100", bind=previous_100)
+        if not live:
+            vp.button(text="-100", bind=previous_100)
 
         def previous(_button: Any) -> None:
             nonlocal dirty
@@ -971,15 +1146,62 @@ class Visualizer:
             set_paused_label()
             dirty = True
 
-        vp.button(text="-1", bind=previous)
+        if not live:
+            vp.button(text="-1", bind=previous)
 
         def pause(_button: Any) -> None:
             nonlocal dirty
+            if live_complete:
+                return
             playback.toggle_pause()
             set_paused_label()
             dirty = True
 
         pause_button = vp.button(text="Pause", bind=pause)
+
+        if task_intensity is not None:
+            assert task_capacity is not None
+            vp.wtext(text="　Offered load: ")
+
+            def change_task_intensity(input_widget: Any) -> None:
+                value = input_widget.number
+                if value is None or not math.isfinite(value) or value < 0:
+                    intensity_status.text = " enter a non-negative percentage"
+                    input_widget.text = _format_load_percentage(
+                        task_intensity.tasks_per_step,
+                        task_capacity,
+                    )
+                    return
+                tasks_per_step = tasks_for_load_percentage(value, task_capacity)
+                try:
+                    task_intensity.set_tasks_per_step(tasks_per_step)
+                except RuntimeError as exc:
+                    intensity_status.text = f" {exc}"
+                    input_widget.text = _format_load_percentage(
+                        task_intensity.tasks_per_step,
+                        task_capacity,
+                    )
+                    return
+                intensity_status.text = (
+                    f"% → {tasks_per_step} tasks/generation "
+                    f"(100% = {task_capacity})"
+                )
+
+            vp.winput(
+                text=_format_load_percentage(
+                    task_intensity.tasks_per_step,
+                    task_capacity,
+                ),
+                type="numeric",
+                width=90,
+                bind=change_task_intensity,
+            )
+            intensity_status = vp.wtext(
+                text=(
+                    f"% → {task_intensity.tasks_per_step} tasks/generation "
+                    f"(100% = {task_capacity})"
+                )
+            )
 
         def next_frame(_button: Any) -> None:
             nonlocal dirty
@@ -987,7 +1209,8 @@ class Visualizer:
             set_paused_label()
             dirty = True
 
-        vp.button(text="+1", bind=next_frame)
+        if not live:
+            vp.button(text="+1", bind=next_frame)
 
         def next_100(_button: Any) -> None:
             nonlocal dirty
@@ -995,7 +1218,8 @@ class Visualizer:
             set_paused_label()
             dirty = True
 
-        vp.button(text="+100", bind=next_100)
+        if not live:
+            vp.button(text="+100", bind=next_100)
 
         def reset(_button: Any) -> None:
             nonlocal dirty
@@ -1004,7 +1228,8 @@ class Visualizer:
             set_paused_label()
             dirty = True
 
-        vp.button(text="Restart", bind=reset)
+        if not live:
+            vp.button(text="Restart", bind=reset)
 
         def reset_view(_button: Any) -> None:
             scene.forward = vp.vec(0, 0, -1)
@@ -1013,6 +1238,7 @@ class Visualizer:
             scene.range = EARTH_RADIUS_KM * 1.35
             frame = self.frames[playback.index]
             update_utilization_chart(frame)
+            update_live_metrics_charts(frame)
             sun_direction = _eci_to_scene(
                 frame.sun_eci_unit or (1.0, 0.0, 0.0)
             )
@@ -1036,8 +1262,9 @@ class Visualizer:
             dragging = True
             drag_moved = False
             resume_after_drag = not playback.paused
-            playback.paused = True
-            set_paused_label()
+            if not live:
+                playback.paused = True
+                set_paused_label()
             previous_pointer_x = pointer_x()
 
         def drag_view(_event: Any) -> None:
@@ -1207,8 +1434,9 @@ class Visualizer:
             if locate:
                 locate_satellite(sat_id)
             selected_satellite_id = sat_id
-            playback.paused = True
-            set_paused_label()
+            if not live:
+                playback.paused = True
+                set_paused_label()
             sync_inspector(sat_id)
             dirty = True
 
@@ -1298,15 +1526,28 @@ class Visualizer:
             if pending_rotation:
                 rotate_view(pending_rotation)
                 pending_rotation = 0.0
-            if playback.advance():
-                dirty = True
-            elif playback.paused:
-                set_paused_label()
+            if not dirty:
+                if live and not playback.paused:
+                    assert advance_live is not None
+                    if advance_live():
+                        playback.frame_count = len(self.frames)
+                        playback.index = playback.frame_count - 1
+                        dirty = True
+                    else:
+                        live_complete = True
+                        playback.paused = True
+                        set_paused_label()
+                        dirty = True
+                elif not live and playback.advance():
+                    dirty = True
+                elif playback.paused:
+                    set_paused_label()
             if not dirty:
                 continue
 
             frame = self.frames[playback.index]
             update_utilization_chart(frame)
+            update_live_metrics_charts(frame)
             sun_direction = _eci_to_scene(
                 frame.sun_eci_unit or (1.0, 0.0, 0.0)
             )
@@ -1316,9 +1557,13 @@ class Visualizer:
                 axis=vp.vec(0, 1, 0),
             )
             earth_time_s = frame.time_s
+            if live:
+                status = "Completed" if live_complete else "Live"
+                step_label = f"Step {playback.index + 1} | {status}"
+            else:
+                step_label = f"Step {playback.index + 1} / {len(self.frames)}"
             scene.title = (
-                f"{self.title} | {_format_time_label(frame.time_label)} | "
-                f"Step {playback.index + 1} / {len(self.frames)}"
+                f"{self.title} | {_format_time_label(frame.time_label)} | {step_label}"
             )
             for sat in frame.satellites:
                 obj = objects[sat.sat_id]
@@ -1490,8 +1735,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-"""
-online visualizer - inject task intensity
-updated task failure rate
-"""

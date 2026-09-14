@@ -4,7 +4,7 @@ import sys
 import time
 
 from .config import SimulationConfig
-from .models import SatelliteState
+from .models import SatelliteState, TaskIntensity
 from .orbit import iter_circular_states
 from .runlog import JsonObject, RunLog
 from .scheduler import create_scheduler
@@ -130,6 +130,10 @@ def run(config: SimulationConfig) -> int:
             walker_phase=config.walker_phase,
             task_event_sink=run_log.write_task_event,
             step_sink=run_log.write_step,
+            task_intensity=TaskIntensity(
+                config.task.tasks_per_step,
+                config.task_intensity_schedule,
+            ),
         )
         for steps, states in enumerate(step_iterator, start=1):
             if first is None:

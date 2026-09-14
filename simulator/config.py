@@ -54,6 +54,9 @@ REQUIRED_CONFIG_KEYS = {
 }
 
 OPTIONAL_CONFIG_DEFAULTS = {
+    "task": {
+        "intensity_schedule": [],
+    },
     "logging": {
         "state_steps": "full",
         "summary_start_s": None,
@@ -79,6 +82,8 @@ class SimulationConfig:
     task: TaskConfig
     isl: ISLConfig
     scheduler_name: str
+    task_intensity_schedule: tuple[tuple[int, int], ...]
+    source: JsonObject
     effective: JsonObject
 
 
@@ -159,8 +164,48 @@ def _validate_values(
         raise ValueError("battery.min_safe_pct must be within [0, 100]")
     if task["interval_s"] <= 0:
         raise ValueError("task.interval_s must be positive")
-    if task["tasks_per_step"] < 0:
-        raise ValueError("task.tasks_per_step must be non-negative")
+    if (
+        not isinstance(task["tasks_per_step"], int)
+        or isinstance(task["tasks_per_step"], bool)
+        or task["tasks_per_step"] < 0
+    ):
+        raise ValueError("task.tasks_per_step must be a non-negative integer")
+    intensity_schedule = task.get("intensity_schedule", [])
+    if not isinstance(intensity_schedule, list):
+        raise ValueError("task.intensity_schedule must be an array")
+    previous_time_s = -1
+    for index, change in enumerate(intensity_schedule):
+        source = f"task.intensity_schedule[{index}]"
+        if not isinstance(change, dict) or set(change) != {
+            "time_s",
+            "tasks_per_step",
+        }:
+            raise ValueError(
+                f"{source} must contain only time_s and tasks_per_step"
+            )
+        change_time_s = change["time_s"]
+        tasks_per_step = change["tasks_per_step"]
+        if (
+            not isinstance(change_time_s, int)
+            or isinstance(change_time_s, bool)
+            or change_time_s < 0
+        ):
+            raise ValueError(f"{source}.time_s must be a non-negative integer")
+        if change_time_s <= previous_time_s:
+            raise ValueError("task.intensity_schedule times must strictly increase")
+        if change_time_s > duration_s or change_time_s % step_s:
+            raise ValueError(
+                f"{source}.time_s must align with time.step_s and not exceed duration"
+            )
+        if (
+            not isinstance(tasks_per_step, int)
+            or isinstance(tasks_per_step, bool)
+            or tasks_per_step < 0
+        ):
+            raise ValueError(
+                f"{source}.tasks_per_step must be a non-negative integer"
+            )
+        previous_time_s = change_time_s
     if task["deadline_s"] <= 0:
         raise ValueError("task.deadline_s must be positive")
     if task["deadline_min_s"] <= 0:
@@ -300,5 +345,10 @@ def load_config(path: Path) -> SimulationConfig:
         task=task,
         isl=isl,
         scheduler_name=sections["scheduler"]["name"],
+        task_intensity_schedule=tuple(
+            (change["time_s"], change["tasks_per_step"])
+            for change in task_values.get("intensity_schedule", [])
+        ),
+        source=copy.deepcopy(sections),
         effective=_effective_config(sections, demand_points_file, logging),
     )

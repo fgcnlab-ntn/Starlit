@@ -320,10 +320,17 @@ def generate_step_tasks(
     env: EnvironmentRuntime,
     task_config: TaskConfig,
     compute_config: ComputeConfig,
+    *,
+    tasks_per_step: int | None = None,
 ) -> tuple[list[Task], list[Task]]:
     if env.time_s > 0 and env.time_s % task_config.interval_s == 0:
         env.pending_tasks.extend(
-            generate_demand_point_tasks(env, task_config, compute_config)
+            generate_demand_point_tasks(
+                env,
+                task_config,
+                compute_config,
+                tasks_per_step=tasks_per_step,
+            )
         )
     return resolve_pending_tasks(env, task_config)
 
@@ -332,11 +339,22 @@ def generate_demand_point_tasks(
     env: EnvironmentRuntime,
     task_config: TaskConfig,
     compute_config: ComputeConfig,
+    *,
+    tasks_per_step: int | None = None,
 ) -> list[Task]:
     if env.time_utc is None:
         raise ValueError("demand-point task generation requires an absolute UTC simulation time")
     tasks: list[Task] = []
-    for _ in range(task_config.tasks_per_step):
+    task_count = (
+        task_config.tasks_per_step if tasks_per_step is None else tasks_per_step
+    )
+    if (
+        not isinstance(task_count, int)
+        or isinstance(task_count, bool)
+        or task_count < 0
+    ):
+        raise ValueError("tasks_per_step must be a non-negative integer")
+    for _ in range(task_count):
         point = choose_demand_point(env.rng, task_config.demand_distribution)
         task = Task(
             task_id=env.next_task_id,

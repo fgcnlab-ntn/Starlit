@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,52 @@ class TaskConfig:
     deadline_min_s: float
     demand_distribution: DemandDistribution
     min_elevation_deg: float
+
+
+@dataclass(slots=True)
+class TaskIntensity:
+    tasks_per_step: int
+    schedule: tuple[tuple[int, int], ...] = ()
+    _scheduled_by_time: dict[int, int] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.set_tasks_per_step(self.tasks_per_step)
+        self._scheduled_by_time = {}
+        previous_time_s = -1
+        for time_s, tasks_per_step in self.schedule:
+            if time_s <= previous_time_s:
+                raise ValueError("task intensity schedule times must increase")
+            self._validate_change(time_s, tasks_per_step)
+            self._scheduled_by_time[time_s] = tasks_per_step
+            previous_time_s = time_s
+
+    def set_tasks_per_step(self, value: int) -> None:
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ValueError("tasks_per_step must be a non-negative integer")
+        self.tasks_per_step = value
+
+    @staticmethod
+    def _validate_change(time_s: int, tasks_per_step: int) -> None:
+        if not isinstance(time_s, int) or isinstance(time_s, bool) or time_s < 0:
+            raise ValueError("task intensity time_s must be a non-negative integer")
+        if (
+            not isinstance(tasks_per_step, int)
+            or isinstance(tasks_per_step, bool)
+            or tasks_per_step < 0
+        ):
+            raise ValueError("tasks_per_step must be a non-negative integer")
+
+    def schedule_change(self, time_s: int, tasks_per_step: int) -> None:
+        self._validate_change(time_s, tasks_per_step)
+        self._scheduled_by_time[time_s] = tasks_per_step
+        self.schedule = tuple(sorted(self._scheduled_by_time.items()))
+        self.tasks_per_step = tasks_per_step
+
+    def tasks_for_time(self, time_s: int) -> int:
+        scheduled = self._scheduled_by_time.get(time_s)
+        if scheduled is not None:
+            self.tasks_per_step = scheduled
+        return self.tasks_per_step
 
 
 @dataclass(frozen=True)

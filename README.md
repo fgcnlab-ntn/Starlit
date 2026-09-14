@@ -87,6 +87,35 @@ python -m tools.visualizer output/log
 
 視覺化只讀取既有輸出，不會重新執行或修改模擬結果。
 
+### 即時執行與視覺化
+
+Online visualizer 逐步執行模擬並更新畫面；可暫停，但不提供倒放或快進：
+
+```bash
+python -m tools.online_visualizer \
+  --config configs/loading-ratio/r80/starlit.json
+```
+
+輸入新的 task intensity 百分比後，新值從下一個 step 生效。Simulation log
+直接使用 config 的 `output` 與 `logging` 設定。第一次修改 intensity 時另外
+建立：
+
+- `controls.jsonl`：完整操作紀錄。
+- `replay-config.json`：可直接重播的完整 config。
+
+Config 也可在 `task` 中預先定義：
+
+```json
+"intensity_schedule": [
+  {"time_s": 3600, "tasks_per_step": 8000},
+  {"time_s": 7200, "tasks_per_step": 4000}
+]
+```
+
+時間必須遞增、對齊 `time.step_s` 且不超過 duration。重播以
+`tasks_per_step` 為準。畫面另顯示衛星電量、utilization，以及最近 100 steps
+的累計 failure rate 與 pending rate。
+
 ## 評估指標
 
 電池安全門檻定義為：
@@ -221,4 +250,5 @@ python tools/compare_grouped_task_outcomes.py \
 | `tools/plot_final_loading_effects.py` | 繪製負載比例對電池與任務結果的影響。 |
 | `tools/plot_output.py` | 統一圖表輸出為 PNG 與 PDF。 |
 | `tools/visualizer.py` | 互動播放 `states.jsonl` 中的衛星軌跡。 |
+| `tools/online_visualizer.py` | 即時執行模擬、更新畫面並調整任務負載。 |
 | `tools/worldpop_to_demand_points.py` | 將 WorldPop 柵格資料彙整成需求點 CSV。 |

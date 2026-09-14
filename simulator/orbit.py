@@ -31,6 +31,7 @@ from .models import (
     SnapshotContext,
     Task,
     TaskConfig,
+    TaskIntensity,
 )
 from .route_cost import estimate_route_cost
 from .runtime import EnvironmentRuntime, RunningTask, SatelliteRuntime, TaskEventSink
@@ -607,6 +608,7 @@ def iter_circular_states(
     walker_phase: int = 0,
     task_event_sink: TaskEventSink | None = None,
     step_sink: StepSink | None = None,
+    task_intensity: TaskIntensity | None = None,
 ) -> Iterable[list[SatelliteState]]:
     if satellites <= 0:
         raise ValueError("satellites must be positive")
@@ -714,7 +716,16 @@ def iter_circular_states(
             step_index=step_index,
         )
 
-        new_tasks, expired_tasks = generate_step_tasks(env, task_config, compute_config)
+        new_tasks, expired_tasks = generate_step_tasks(
+            env,
+            task_config,
+            compute_config,
+            tasks_per_step=(
+                None
+                if task_intensity is None
+                else task_intensity.tasks_for_time(time_s)
+            ),
+        )
         deferred_tasks, expired_deferred_tasks = pop_deferred_tasks(env)
 
         tasks = deferred_tasks + new_tasks
