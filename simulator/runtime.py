@@ -22,11 +22,9 @@ TaskEventSink = Callable[[dict[str, object]], None]
 
 @dataclass
 class SatelliteRuntime:
-    """Mutable per-satellite simulation state.
+    """持有單顆衛星的可變狀態
 
-    This is the owner of state that changes during the simulation.  Snapshot
-    dataclasses are for output only; policies and energy accounting should not
-    pass around parallel arrays for battery, load, and task ownership.
+    排程使用 SatelliteView，輸出使用 SatelliteState
     """
 
     sat_id: int
@@ -180,8 +178,6 @@ class RunningTask:
 
 @dataclass
 class EnvironmentRuntime:
-    """Mutable simulation state shared by orbit, scheduler, and accounting."""
-
     satellites: list[SatelliteRuntime]
     rng: random.Random = field(default_factory=random.Random)
     time_s: int = 0
@@ -196,8 +192,6 @@ class EnvironmentRuntime:
 
     @property
     def running_tasks(self) -> list[RunningTask]:
-        """Flattened view of per-satellite execution queues."""
-
         return [task for sat in self.satellites for task in sat.task_queue]
 
     def views(self, *, include_queue_tasks: bool = False) -> list[SatelliteView]:

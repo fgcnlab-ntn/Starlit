@@ -213,13 +213,7 @@ def state_record(
 
 
 class RunLog:
-    """Streaming structured log for one simulation run.
-
-    Streaming JSONL run output.
-
-    Full state records are flushed per step for crash recovery. Large experiment
-    matrices can disable them while retaining the incrementally computed summary.
-    """
+    """完整狀態每步寫入磁碟；不記錄完整狀態時仍可產生摘要"""
 
     def __init__(self, output_dir: Path, start: dt.datetime, config: dict[str, object]):
         self.output_dir = output_dir

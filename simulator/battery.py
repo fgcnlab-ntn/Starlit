@@ -3,12 +3,12 @@ from __future__ import annotations
 from .models import BatteryConfig
 
 
-# Tolerate accumulated floating-point noise.
+# 容許浮點運算的微小誤差
 ENERGY_EPSILON_J = 1.0e-6
 
 
 def battery_is_safe(battery_j: float, min_safe_j: float) -> bool:
-    """Return whether battery energy meets the limit within numeric noise."""
+    """判斷電量是否在誤差容許範圍內高於安全值"""
 
     return battery_j + ENERGY_EPSILON_J >= min_safe_j
 
@@ -33,7 +33,7 @@ def battery_step(
     task_energy_j: float,
     update: bool,
 ) -> tuple[float, float, float]:
-    """Return next battery, harvested, and idle-consumed energy in joules."""
+    """回傳更新後電量、收集能量與待機耗能，單位均為 J"""
 
     if not update:
         return battery_now, 0.0, 0.0

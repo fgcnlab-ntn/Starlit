@@ -20,7 +20,7 @@ def _link_geometry_sq(
     a: SatelliteView,
     b: SatelliteView,
 ) -> tuple[float, float | None]:
-    """Return squared separation and closest squared geocentric distance."""
+    """回傳兩衛星距離平方及連線至地心的最短距離平方"""
 
     ax, ay, az = a.x_km, a.y_km, a.z_km
     dx = b.x_km - ax
@@ -48,8 +48,6 @@ def has_line_of_sight(
     b: SatelliteView,
     earth_radius_km: float = EARTH_RADIUS_KM,
 ) -> bool:
-    """Return true when the segment between satellites clears Earth."""
-
     _, clearance_sq = _link_geometry_sq(a, b)
     return clearance_sq is None or clearance_sq > earth_radius_km * earth_radius_km
 
@@ -58,8 +56,6 @@ def grid_constellation_layout(
     satellites: Iterable[SatelliteView],
     walker_phase: int = 0,
 ) -> ISLGraph:
-    """Build the fixed four-neighbor topology for a Walker constellation."""
-
     sat_list = sorted(satellites, key=lambda sat: sat.sat_id)
     if len(sat_list) != len({sat.sat_id for sat in sat_list}):
         raise ValueError("duplicate satellite id")
@@ -190,8 +186,6 @@ def build_route_tree(
     source_sat: int,
     blocked_relays: set[int] | None = None,
 ) -> dict[int, int | None]:
-    """Return a shortest-route tree rooted at one source."""
-
     if source_sat not in graph.adjacency:
         return {}
 
@@ -235,8 +229,6 @@ def route_from_parents(
 
 
 def routes_from_source(graph: ISLGraph, source_sat: int) -> dict[int, Route]:
-    """Return shortest routes from one source to every reachable satellite."""
-
     parents = build_route_tree(graph, source_sat)
     routes: dict[int, Route] = {}
     for target_sat in parents:
@@ -251,8 +243,6 @@ def routes_to_targets(
     source_sat: int,
     target_sats: set[int],
 ) -> dict[int, Route]:
-    """Return shortest routes from one source to requested reachable targets."""
-
     if not target_sats or source_sat not in graph.adjacency:
         return {}
 

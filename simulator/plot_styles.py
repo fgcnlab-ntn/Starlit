@@ -104,7 +104,7 @@ def run_display_label(run_dir: str | Path) -> str:
 
 
 def find_method_run_dir(parent: Path, method: str) -> Path | None:
-    """Find a current or historical output directory for a method."""
+    """尋找指定方法目前或舊版的輸出目錄"""
 
     canonical = canonical_method(method)
     for directory_name in _RUN_DIRECTORY_NAMES[canonical]:

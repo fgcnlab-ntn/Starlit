@@ -92,7 +92,7 @@ def validate_task_config(task_config: TaskConfig) -> None:
 
 
 def deadline_random_seed(random_seed: int | None) -> int | None:
-    """Derive an independent seed without perturbing the workload RNG stream."""
+    """產生獨立種子，不影響工作負載的隨機數序列"""
 
     return None if random_seed is None else random_seed ^ DEADLINE_SEED_SALT
 
@@ -206,14 +206,7 @@ def nearest_satellite_ids_vectorized(
     time_utc: dt.datetime,
     min_elevation_deg: float = 30.0,
 ) -> list[int | None]:
-    """Find nearest visible satellites for many ground points at one time.
-
-    The scalar path above calls Skyfield ``altaz()`` for every
-    point/satellite pair.  That is the wrong data structure for a sweep:
-    geometry is a matrix.  Build the ground-position and satellite-position
-    matrices once, then use dot products for elevation and vector norms for
-    distance.
-    """
+    """使用 NumPy 時，先依仰角篩選，再計算距離"""
 
     if not points:
         return []
@@ -292,13 +285,7 @@ def elevation_candidate_mask(
     satellite_radii_km,
     min_elevation_deg: float,
 ):
-    """Return point/satellite pairs that can satisfy the elevation limit.
-
-    This is the cheap rejection pass.  Visibility only depends on the central
-    angle between the ground radial vector and the satellite radial vector,
-    plus the two radii.  A dot-product matrix gives that angle without
-    allocating the full point/satellite line-of-sight vector matrix.
-    """
+    """依仰角篩選，避免建立每組地面點與衛星的視線向量"""
 
     import numpy as np
 

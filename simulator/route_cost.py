@@ -80,12 +80,8 @@ def estimate_route_cost(
     compute_config: ComputeConfig,
     isl_config: ISLConfig,
 ) -> RouteCost:
-    """Estimate execution cost for a task over a route.
-
-    A single-node route means local execution.  A multi-node route sends input
-    forward from source to target, computes at the target, then sends output
-    back along the same path in reverse.  The two-node route is exactly the
-    historical one-hop model.
+    """單節點路徑為本地執行；多節點路徑將輸入送至目標運算
+    再沿原路反向傳回輸出。雙節點路徑維持原本的單跳模型
     """
 
     timing = estimate_route_timing(

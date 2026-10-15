@@ -75,8 +75,6 @@ def project_nonpreemptive_edf_queue(
     *,
     time_s: float,
 ) -> EDFQueueProjection | None:
-    """Order waiting work by deadline and reject an infeasible projection."""
-
     active = [task for task in tasks if task.started]
     waiting = sorted(
         (task for task in tasks if not task.started),
@@ -103,8 +101,6 @@ def enforce_edf_queue_feasibility(
     compute_config: ComputeConfig,
     isl_config: ISLConfig,
 ) -> list[Assignment]:
-    """Admit assignments only when the target's full EDF queue stays feasible."""
-
     task_by_id = {task.task_id: task for task in tasks}
     projected_queues = {
         sat.sat_id: [
@@ -171,7 +167,7 @@ def reserved_energy_for_sat(reserved_energy, sat_id: int) -> float:
 
 
 class BatteryReservation:
-    """Batch-local battery headroom and transmission-energy ledger."""
+    """單次排程的電量餘裕與傳輸耗能紀錄"""
 
     def __init__(
         self,
@@ -296,8 +292,6 @@ def hard_limit_reserved_energy_by_sat(
     battery: BatteryConfig,
     compute_config: ComputeConfig,
 ) -> BatteryReservation:
-    """Build the batch-local energy ledger from the exact transition lookup."""
-
     return BatteryReservation.build(
         satellite_views=satellite_views,
         time_s=time_s,
@@ -343,7 +337,7 @@ def route_transmission_energy_by_sat(
     route_cost: RouteCost,
     compute_config: ComputeConfig,
 ) -> dict[int, float]:
-    """Return route energy excluding target CPU compute energy."""
+    """回傳路徑耗能，扣除目標衛星的 CPU 運算耗能。"""
 
     target_compute_j = route_cost.compute_time_s * compute_config.cpu_power_w
     transmission_by_sat = {}
@@ -383,7 +377,7 @@ def _projection_horizon_s(
     step_s: int,
     workload_s: float,
 ) -> float:
-    """Return the horizon through the next unavoidable discharge interval."""
+    """決定電量投影終點：下次恢復日照或已知時間範圍"""
 
     now = float(time_s)
     fallback = now + max(float(step_s), workload_s)
@@ -444,13 +438,12 @@ def minimum_projected_battery_until_recharge(
     extra_compute_time_s: float = 0.0,
     extra_energy_j: float = 0.0,
 ) -> float:
-    """Project the minimum battery through the next eclipse/recharge window.
+    """估算指定時間範圍內的最低電量
 
-    ``available_time_s`` encodes compute already queued for the satellite.
-    ``extra_compute_time_s`` is the candidate work appended to that queue.
-    ``extra_energy_j`` is non-compute route energy already reserved or added by
-    the candidate.  Runtime still updates the real battery step by step; this
-    function only answers whether the scheduler may spend the margin.
+    ``available_time_s`` 是既有任務排完後的可用時間
+    ``extra_compute_time_s`` 是待加入的運算時間
+    ``extra_energy_j`` 是已預留或待加入的非運算耗能
+    此估算僅供排程判斷，實際電量仍由模擬逐步更新
     """
 
     if compute_power_w is None:
@@ -859,17 +852,10 @@ class NearestSunlitScheduler(Scheduler):
 
 
 class GreedyEnergyScheduler(Scheduler):
-    """Greedy baseline adapted from the LEO energy-allocation paper.
+    """沿用模擬器固定功率模型的論文啟發式基準排程器。
 
-    Ground stations are intentionally not modeled.  The paper's DVFS compute
-    model is represented by the simulator's existing compute-power model, and
-    Friis link loss is represented by the existing tx-power-per-bit model.
-
-    Feasibility is enforced first: deadline, source-local CPU quota, and the
-    shadow battery guard are hard constraints.  Among feasible local and sunlit
-    relay candidates, choose the lowest shadow-battery-impact option.  Energy
-    spent on sunlit satellites is treated as cheaper than energy drained from
-    eclipse satellites, matching the paper's battery-preservation intent.
+    先檢查期限、本地 CPU 配額與電池安全，再減少蝕區衛星耗能。
+    不模擬地面站。
     """
 
     name = "greedy-energy"
@@ -1053,14 +1039,7 @@ class GreedyEnergyScheduler(Scheduler):
         satellite_views_by_id: dict[int, SatelliteView],
         isl_graph: ISLGraph,
     ) -> tuple[Route, ...]:
-        """Return a small stable set of nearest sunlit compute routes.
-
-        The simplified link-energy model charges per hop, not per distance.
-        Scanning every sunlit satellite per task is therefore just wasted work:
-        lower-hop routes dominate higher-hop routes on energy.  Keep a bounded
-        set so queue/deadline tie-breaks still have alternatives without
-        turning each scheduling slot into tasks x constellation_size work.
-        """
+        """鏈路成本按跳數計算，因此限制候選日照衛星的搜尋範圍。"""
 
         if source.sat_id not in isl_graph.adjacency:
             return ()
@@ -1240,8 +1219,6 @@ class GreedyEnergyScheduler(Scheduler):
 
 
 class StarlitScheduler(Scheduler):
-    """Schedule battery-safe work across local, sunlit, and eclipse peers."""
-
     name = "starlit"
     queue_discipline = "edf"
 
@@ -1258,7 +1235,7 @@ class StarlitScheduler(Scheduler):
         deadline_time: float,
         compute_time_s: float,
     ) -> tuple[float, float] | None:
-        """Return normalized projected slot occupancy and finish time."""
+        """回傳正規化的預估時間步占用率與完成時間。"""
         import math
 
         now = float(time_s)
@@ -1301,9 +1278,7 @@ class StarlitScheduler(Scheduler):
         if sat.sunlit:
             return load_cost, finish_time, True
 
-        # Local eclipse work cannot be moved after it enters the execution
-        # queue.  Project the battery through all work already committed to
-        # this satellite, including reservations made earlier in this batch.
+        # 蝕區本地任務入列後無法轉移；電量投影須包含本批次已預留的工作。
         committed_workload_s = max(0.0, available_time_s - float(time_s))
         projected_workload_s = committed_workload_s + compute_time_s
         projected_energy_j = (
@@ -1354,12 +1329,10 @@ class StarlitScheduler(Scheduler):
             (deferred_workload_s + compute_time_s) / step_s
         )
         if has_feasible_sunlit_execution:
-            # Deferring would discard an immediately feasible, energy-safe
-            # execution opportunity.  Execution wins the cost-1 tie.
+            # 已有安全可行的執行機會；成本同為 1 時優先執行。
             immediate_opportunity_cost = 1.0
         elif local_eclipse_cost is not None:
-            # With no usable sunlit target, wait only when local eclipse risk
-            # is worse than the complementary value of preserving it.
+            # 無可用日照目標時，依本地蝕區風險決定是否等待。
             immediate_opportunity_cost = 1.0 - self._clip_unit(
                 local_eclipse_cost
             )
@@ -1380,7 +1353,6 @@ class StarlitScheduler(Scheduler):
         time_s: int,
         exclude_sat_id: int,
     ) -> tuple[int, float] | None:
-        """Peek a valid candidate without consuming its heap entry."""
         import heapq
 
         excluded_entries = []
@@ -1393,8 +1365,7 @@ class StarlitScheduler(Scheduler):
                 reserved_available_time[sat_id] - float(time_s),
             )
 
-            # Updated reservations always push a new entry, so an old entry
-            # can be discarded instead of being inserted again.
+            # 預留量更新會加入新項目，舊項目可直接丟棄。
             if abs(recorded_load - current_load) > 1e-9:
                 continue
 
@@ -1426,13 +1397,7 @@ class StarlitScheduler(Scheduler):
         time_s: int,
         step_s: int,
     ) -> bool:
-        """Whether a safe sunlit local action is cheap enough to stop search.
-
-        This is an optimization, not policy.  It is only valid while local
-        execution does not add cross-slot queue pressure.  Under high loading,
-        blindly accepting every safe sunlit local task hides the load term from
-        the original cost model and starves offload opportunities.
-        """
+        """僅在安全的本地任務可於此時間步完成時略過卸載搜尋。"""
 
         return (
             source.sunlit
@@ -1489,7 +1454,6 @@ class StarlitScheduler(Scheduler):
         exclude_sat_id: int,
         protected_cost: float | None,
     ) -> tuple[float, float, int, Route, RouteCost] | None:
-        """Return the least-loaded reachable safe eclipse peer, if any."""
         import heapq
 
         skipped_entries = []
@@ -1728,6 +1692,7 @@ class StarlitScheduler(Scheduler):
         assignments: list[Assignment] = []
         deferred_workload_s = {sat.sat_id: 0.0 for sat in satellite_views}
 
+        # 逐個指派，前一任務預留的時間與電量會影響後一任務
         for task in ordered_tasks:
             assert task.source_sat is not None
 
@@ -1908,6 +1873,7 @@ class StarlitScheduler(Scheduler):
                     local_eclipse_cost=None,
                 )
 
+            # 安全且本步可完成的日照本地任務優先，其次是可行的日照目標
             if prefer_local:
                 action = "local"
             elif prefer_sunlit:
@@ -2045,7 +2011,7 @@ class StarlitScheduler(Scheduler):
 
 
 class PhoenixScheduler(Scheduler):
-    """Schedule tasks using bounded PHOENIX energy-aware peer selection."""
+    """以限制候選數量的 PHOENIX 能量感知方法排程任務。"""
 
     name = "phoenix"
     queue_discipline = "edf"
@@ -2167,13 +2133,7 @@ class PhoenixScheduler(Scheduler):
         compute_config: ComputeConfig,
         isl_config: ISLConfig,
     ) -> float:
-        """Estimate PHOENIX-style residual energy for a peer candidate.
-
-        The paper uses future solar energy, current battery, and queued work.
-        The simulator does not keep a full future sunlight matrix here, so use
-        the cheap state we already have: current sunlight over this task window,
-        current battery, already-reserved work, and this route's target energy.
-        """
+        """估算剩餘能量，假設目前日照狀態持續至任務完成。"""
 
         route_cost = estimate_route_cost(
             task=task,
@@ -2461,9 +2421,7 @@ class PhoenixScheduler(Scheduler):
         )
         candidate_cache = self._candidate_cache(satellite_views)
 
-        # PHOENIX's orbit-level load is a scheduling-horizon signal, not a
-        # lifetime counter.  Use one assign_tasks() batch as the horizon and
-        # expose the last batch for diagnostics.
+        # 軌道面負載只統計本批次排程，不累計整段模擬。
         self.plane_load_by_plane = {}
 
         assignments = []

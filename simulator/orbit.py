@@ -53,8 +53,6 @@ def validate_compute_config(compute: ComputeConfig) -> None:
 
 @dataclass(frozen=True)
 class CircularIlluminationTimeline:
-    """Step-aligned illumination and transition lookup for a circular run."""
-
     step_s: int
     duration_s: int
     sunlit_by_step: tuple[bytes, ...]
@@ -63,7 +61,7 @@ class CircularIlluminationTimeline:
 
     @property
     def horizon_time_s(self) -> float:
-        # The runtime applies the final sampled illumination for one full slot.
+        # 最後一次取樣的日照狀態仍套用於完整時間步
         return float(self.duration_s + self.step_s)
 
     def apply(self, *, env: EnvironmentRuntime, step_index: int) -> None:
@@ -99,8 +97,6 @@ def build_circular_illumination_timeline(
     walker_phase: int,
     mean_motion: float,
 ) -> CircularIlluminationTimeline:
-    """Precompute exact simulator-slot illumination and transition lookups."""
-
     times = tuple(range(0, duration_s + 1, step_s))
     orbital_speed_km_s = radius_km * mean_motion
     plane_geometry = tuple(
@@ -291,6 +287,8 @@ def apply_step(
     expired_tasks: list[Task] | None = None,
     queue_discipline: str = "fifo",
 ) -> list[SatelliteState]:
+    """任務可延後、立即失敗或入列"""
+
     stats_by_sat = {sat.sat_id: SatelliteStepStats() for sat in env.satellites}
     task_by_id = {task.task_id: task for task in tasks}
     cpu_time_left_s = {sat.sat_id: step_s for sat in env.satellites}
@@ -301,15 +299,12 @@ def apply_step(
 
     expired_tasks = [] if expired_tasks is None else expired_tasks
 
-    # Only count tasks generated at this time slot.
-    # Deferred tasks that re-enter Q(t) should not be counted as newly generated.
+    # 延後任務重新進入此 time step 時，不算新產生的任務
     for task in tasks:
         if task.source_sat is not None and task.created_time_s == env.time_s:
             stats_by_sat[task.source_sat].generated_tasks += 1
 
-    # Expired tasks can come from two places:
-    # 1. demand-point workload pending tasks with no coverage
-    # 2. deferred tasks whose deadline has expired
+    # 到期任務包含未獲覆蓋的需求及延後的任務
     for task in expired_tasks:
         waiting_time_s = env.time_s - task.created_time_s
         env.failed_tasks.append(task.task_id)
@@ -344,8 +339,7 @@ def apply_step(
         )
         source_stats = stats_by_sat[assignment.source_sat]
 
-        # Scheduler defer action.
-        # A deferred task does not consume task energy and is not counted as failed.
+        # 延後不消耗任務能量，也不計為失敗
         if assignment.mode == "defer":
             env.deferred_tasks.append(task)
             source_stats.deferred_tasks += 1
@@ -360,7 +354,6 @@ def apply_step(
 
             continue
 
-        # Scheduler explicit fail action.
         if assignment.mode == "fail":
             source_stats.failed_tasks += 1
             env.failed_tasks.append(task.task_id)
@@ -554,6 +547,7 @@ def apply_step(
     for sat in env.satellites:
         stats = stats_by_sat[sat.sat_id]
 
+        # t=0 不結算電量，保留初始值
         battery_now, harvested_j, consumed_j = battery_step(
             battery_now=sat.battery_j,
             sunlit=sat.sunlit,
@@ -610,6 +604,8 @@ def iter_circular_states(
     step_sink: StepSink | None = None,
     task_intensity: TaskIntensity | None = None,
 ) -> Iterable[list[SatelliteState]]:
+    """每步更新軌道與日照，產生並排程任務，再執行與更新電量"""
+
     if satellites <= 0:
         raise ValueError("satellites must be positive")
     if planes <= 0 or satellites % planes != 0:
