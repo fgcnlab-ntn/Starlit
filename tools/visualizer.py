@@ -755,9 +755,17 @@ class Visualizer:
             ),
             "foreground": vp.color.black,
             "background": vp.color.white,
-            "ymin": 0,
             "fast": True,
         }
+        if self.frames.battery_capacity_j is not None:
+            battery_axis_y = 0.5
+        else:
+            initial_battery_max = max(
+                (satellite.battery_j for satellite in first.satellites),
+                default=0.0,
+            )
+            battery_axis_y = max(1.0, initial_battery_max * 0.005)
+        graph_args["ymin"] = 0
         graph_args["xmin"], graph_args["xmax"] = _battery_chart_x_bounds(
             first.time_s,
             first.time_s,
@@ -766,20 +774,24 @@ class Visualizer:
         if self.frames.battery_capacity_j is not None:
             graph_args["ymax"] = 100
         battery_graph = vp.graph(**graph_args)
-        # VPython does not render a graph until a plot contains data.  A
-        # one-point curve draws no line but makes the empty graph visible.
-        _battery_graph_placeholder = vp.gcurve(
+        # Flot clips a curve placed exactly on ymin.  Draw the baseline less
+        # than one percent above zero so it remains visible over the gray grid.
+        battery_axis_line = vp.gcurve(
             graph=battery_graph,
-            data=[(first.time_s / 3600.0, 0.0)],
-            color=vp.color.white,
+            data=[
+                (graph_args["xmin"], battery_axis_y),
+                (graph_args["xmax"], battery_axis_y),
+            ],
+            color=vp.color.black,
+            width=4,
         )
 
         utilization_graph = vp.graph(
             width=450,
             height=320,
             align="none",
-            title="Satellite utilization by illumination<br>Sunlit / Eclipse",
-            xtitle="1 = Sunlit                     2 = Eclipse",
+            title="Satellite utilization by illumination",
+            xtitle="Sunlit                              Eclipse",
             ytitle="Utilization (%)",
             xmin=0.5,
             xmax=2.5,
@@ -848,9 +860,13 @@ class Visualizer:
             f'<style>#glowscript{{position:relative;min-width:1440px{live_page_height}}}'
             '.glowscript-graph{position:absolute!important;top:18px;left:950px;'
             'float:none!important;background:#fff!important}'
-            '.glowscript-graph + .glowscript-graph{top:360px!important}</style>'
+            '.glowscript-graph + .glowscript-graph{top:340px!important}'
+            '.glowscript-graph + .glowscript-graph .xAxis .tickLabel'
+            '{display:none!important}</style>'
             '<style>.glowscript-graph + .glowscript-graph + .glowscript-graph'
             '{top:702px!important}'
+            '.glowscript-graph + .glowscript-graph + .glowscript-graph '
+            '.xAxis .tickLabel{display:block!important}'
             '.glowscript-graph + .glowscript-graph + .glowscript-graph '
             '+ .glowscript-graph{top:1024px!important}</style>'
             '<div style="clear:both"></div>'
@@ -1092,6 +1108,7 @@ class Visualizer:
                 self.frames[playback.index].time_s,
                 chart_step_s,
             )
+            battery_axis_line.plot(battery_graph.xmax, battery_axis_y)
             battery_chart_satellite_id = satellite.sat_id
             battery_chart_last_index = playback.index
 
@@ -1158,6 +1175,21 @@ class Visualizer:
             dirty = True
 
         pause_button = vp.button(text="Pause", bind=pause)
+
+        def reset_view(_button: Any) -> None:
+            scene.forward = vp.vec(0, 0, -1)
+            scene.up = vp.vec(0, 1, 0)
+            center_earth_left()
+            scene.range = EARTH_RADIUS_KM * 1.35
+            frame = self.frames[playback.index]
+            update_utilization_chart(frame)
+            update_live_metrics_charts(frame)
+            sun_direction = _eci_to_scene(
+                frame.sun_eci_unit or (1.0, 0.0, 0.0)
+            )
+            face_direction(sun_direction)
+
+        vp.button(text="Reset camera", bind=reset_view)
 
         if task_intensity is not None:
             assert task_capacity is not None
@@ -1231,21 +1263,6 @@ class Visualizer:
         if not live:
             vp.button(text="Restart", bind=reset)
 
-        def reset_view(_button: Any) -> None:
-            scene.forward = vp.vec(0, 0, -1)
-            scene.up = vp.vec(0, 1, 0)
-            center_earth_left()
-            scene.range = EARTH_RADIUS_KM * 1.35
-            frame = self.frames[playback.index]
-            update_utilization_chart(frame)
-            update_live_metrics_charts(frame)
-            sun_direction = _eci_to_scene(
-                frame.sun_eci_unit or (1.0, 0.0, 0.0)
-            )
-            face_direction(sun_direction)
-
-        vp.button(text="Reset camera", bind=reset_view)
-
         dragging = False
         drag_moved = False
         resume_after_drag = False
@@ -1303,11 +1320,13 @@ class Visualizer:
                 satellite_menu.selected = "None"
             dirty = True
 
-        selection_mode = "Satellites"
-        vp.wtext(text="<br>Configure: ")
+        satellite_visibility_mode = "Satellite visibility"
+        orbit_path_visibility_mode = "Orbit-path visibility"
+        selection_mode = satellite_visibility_mode
+        vp.wtext(text="<br>View control: ")
 
         def active_plane_selection() -> PlaneSelection:
-            if selection_mode == "Satellites":
+            if selection_mode == satellite_visibility_mode:
                 return satellite_plane_selection
             return path_plane_selection
 
@@ -1324,14 +1343,21 @@ class Visualizer:
         def choose_selection_mode(menu: Any) -> None:
             nonlocal selection_mode
             selection_mode = menu.selected
+            plane_selection_label.text = (
+                "<br>Show satellites in orbit planes: "
+                if selection_mode == satellite_visibility_mode
+                else "<br>Show full paths for orbit planes: "
+            )
             sync_plane_checkboxes()
 
         vp.menu(
-            choices=["Satellites", "Orbit paths"],
+            choices=[satellite_visibility_mode, orbit_path_visibility_mode],
             index=0,
             bind=choose_selection_mode,
         )
-        vp.wtext(text="<br>Orbit planes: ")
+        plane_selection_label = vp.wtext(
+            text="<br>Show satellites in orbit planes: "
+        )
 
         def select_all_planes(checkbox: Any) -> None:
             nonlocal dirty
@@ -1342,7 +1368,7 @@ class Visualizer:
                 selection.select_none()
             for plane_checkbox in plane_checkboxes.values():
                 plane_checkbox.checked = all_planes_checkbox.checked
-            if selection_mode == "Satellites":
+            if selection_mode == satellite_visibility_mode:
                 if (
                     selected_satellite_id is not None
                     and not satellite_plane_selection.contains(
@@ -1374,7 +1400,7 @@ class Visualizer:
                 all_planes_checkbox.checked = len(selection.selected) == len(
                     selection.planes
                 )
-                if selection_mode == "Satellites":
+                if selection_mode == satellite_visibility_mode:
                     if (
                         selected_satellite_id is not None
                         and not satellite_plane_selection.contains(
@@ -1428,7 +1454,7 @@ class Visualizer:
             plane = self.frames.plane_for(sat_id)
             if ensure_visible and not satellite_plane_selection.contains(plane):
                 satellite_plane_selection.set_selected(plane, True)
-                if selection_mode == "Satellites":
+                if selection_mode == satellite_visibility_mode:
                     sync_plane_checkboxes()
                 _set_visibility(objects, self.frames, satellite_plane_selection)
             if locate:
