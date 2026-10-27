@@ -1,0 +1,6 @@
+{
+  "Starlink": {"satellites": 1584, "planes": 72, "altitude_km": 550.0, "inclination_deg": 53.05, "walker_phase": 1, "raan_spread_deg": 360.0},
+  "OneWeb": {"satellites": 648, "planes": 18, "altitude_km": 1200.0, "inclination_deg": 87.9, "walker_phase": 1, "raan_spread_deg": 360.0},
+  "Iridium NEXT": {"satellites": 66, "planes": 6, "altitude_km": 780.0, "inclination_deg": 86.4, "walker_phase": 2, "raan_spread_deg": 180.0},
+  "Kuiper": {"satellites": 1156, "planes": 34, "altitude_km": 630.0, "inclination_deg": 51.9, "walker_phase": 1, "raan_spread_deg": 360.0}
+}

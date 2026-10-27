@@ -43,6 +43,25 @@ python -c "from skyfield.api import load; load('de440s.bsp')"
 1. 衛星位置與 Sun direction 的 dot product 小於 0，表示衛星在地球相對太陽的另一側（night side），但不一定被地球遮住。
 2. 若衛星到 Sun–Earth 軸線的垂直距離也小於地球半徑，才標記為 `eclipse`；否則為 `sunlit`。
 
+## 無任務的星座日照比例實驗
+
+`tools/sunlit_ratio_experiment.py` 使用同一套圓軌道與地影判斷，不執行任務、排程或電池模擬。預設比較 Starlink、OneWeb、Iridium NEXT 與 Kuiper，從 2026-05-22 12:00 UTC 起取樣 24 小時，每 30 秒抽一次：
+
+```bash
+python tools/sunlit_ratio_experiment.py
+```
+
+四個星座的軌道參數在 `configs/sunlit-ratio/constellations.json`
+工具輸出 `output/sunlit-ratio/satellite_sunlit_ratios.csv`、`run_config.json` 和整合 CDF 的 PNG/PDF。每顆衛星的比例為 `sunlit_samples / samples`
+
+提交用的圖放在 `images/sunlit-ratio-cdf.png`。重新執行實驗後，可用下列指令更新此圖：
+
+```bash
+cp output/sunlit-ratio/satellite_sunlit_ratio_cdf.png images/sunlit-ratio-cdf.png
+```
+
+![四星座 sunlit ratio CDF](images/sunlit-ratio-cdf.png)
+
 ## 執行方式
 
 每次模擬都必須指定一份完整的 JSON 設定檔：
