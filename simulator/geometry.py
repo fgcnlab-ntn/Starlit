@@ -72,6 +72,11 @@ def is_sunlit_cylindrical_shadow(
     pos_km: Vector3,
     sun_unit: Vector3 = (1.0, 0.0, 0.0),
 ) -> bool:
+    """判斷衛星是否有日照。
+
+    ``sun_unit`` 為地球指向太陽的單位向量；衛星在地球另一側且距陰影軸線
+    小於地球半徑時為 eclipse。
+    """
     x, y, z = pos_km
     sx, sy, sz = sun_unit
     along_sun = x * sx + y * sy + z * sz

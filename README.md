@@ -36,6 +36,13 @@ python -c "from skyfield.api import load; load('de440s.bsp')"
 
 模擬設定會讀取 `data/demand/` 內的人口需求資料，因此執行指令時應保持目前工作目錄為專案根目錄。
 
+## 日照判斷
+
+每個 time step 根據衛星位置與 Skyfield 提供的 Sun direction 判斷日照。結果是 binary：
+
+1. 衛星位置與 Sun direction 的 dot product 小於 0，表示衛星在地球相對太陽的另一側（night side），但不一定被地球遮住。
+2. 若衛星到 Sun–Earth 軸線的垂直距離也小於地球半徑，才標記為 `eclipse`；否則為 `sunlit`。
+
 ## 執行方式
 
 每次模擬都必須指定一份完整的 JSON 設定檔：
